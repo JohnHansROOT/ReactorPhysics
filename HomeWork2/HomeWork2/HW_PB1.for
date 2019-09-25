@@ -1,0 +1,126 @@
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+C ODE TO BE INTEGRATED BY FOURTH-ORDER RK METHOD
+      SUBROUTINE FUNC_RK(NEQ,X,Y,DELTAY,H)
+      IMPLICIT REAL*8(A-H,O-Z)
+      REAL*8 :: Y(NEQ),DELTAY(10)
+      DELTAY(1) = Y(2) * H
+      DELTAY(2) = Y(3) * H
+      DELTAY(3) = -Y(1) * Y(3) * H
+      RETURN
+      END
+
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+C FOURTH-ORDER RUNGE KUTTA INTEGRATION ROUTINE
+      SUBROUTINE RUNGE(NEQ,X,Y,H)
+      IMPLICIT REAL*8 (A-H,O-Z)
+      REAL*8 Y(NEQ),DELTAY1(10),DELTAY2(10),DELTAY3(10),
+     1DELTAY4(10),Z(10)
+C FIRST STEP
+      DO I = 1, NEQ
+          Z(I) = Y(I)
+      ENDDO
+      CALL FUNC_RK(NEQ,X,Z,DELTAY1,H)
+C SECOND STEP
+      DO I = 1, NEQ
+          Z(I) = Y(I) + DELTAY1(I) / 2.
+      ENDDO
+      X = X + H / 2.
+      CALL FUNC_RK(NEQ,X,Z,DELTAY2,H)
+C THIRD STEP
+      DO I = 1, NEQ
+          Z(I) = Y(I) + DELTAY2(I) / 2.
+      ENDDO
+      CALL FUNC_RK(NEQ,X,Z,DELTAY3,H)
+C FOURTH STEP
+      DO I = 1, NEQ
+          Z(I) = Y(I) + DELTAY3(I)
+      ENDDO
+      X = X + H / 2.
+      CALL FUNC_RK(NEQ,X,Z,DELTAY4,H)
+C SUMMARY
+      DO I = 1, NEQ
+          Y(I) = Y(I) + (DELTAY1(I) + 2. * DELTAY2(I) + 2. * DELTAY3(I)+
+     1    DELTAY4(I)) / 6.
+      ENDDO
+      RETURN
+      END
+
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+C THIS SUBROUTIN IS FOR THE SHOOTING METHOD WITH RK
+      SUBROUTINE SHOOTING_RK(A,NSTEPS,NEQ,X,Y,H)
+      IMPLICIT REAL*8(A-H,O-Z)
+      REAL*8 Y(NEQ)
+      Y(1) = 0.
+      Y(2) = 0.
+      Y(3) = A
+      DO I = 1, NSTEPS
+          CALL RUNGE(NEQ,X,Y,H)
+      ENDDO
+      RETURN
+      END
+      
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+C THIS IS THE MAIN ROUTIN
+      PROGRAM MAIN
+      IMPLICIT REAL*8(A-H,O-Z)
+      REAL*8 Y(3),DY(3)
+      LOGICAL :: FLAG = .TRUE.
+      OPEN(UNIT=10,FILE='PB1_OUT.TXT')
+      
+      NSTEPS = 200
+C ETA = 15 IS CONSIDERED AS INFINITY
+      XMAX = 15.
+      H = XMAX / NSTEPS
+      NEQ = 3
+      Y(1) = 0.
+      Y(2) = 0.
+      Y(3) = 0.
+      X = 0.
+C INITIAL GUESS
+      WRITE(10,"(A5,F10.6)") "inf =",XMAX
+      WRITE(10,200) "f''(0)","f'(inf)","error"
+      A1 = 0.3
+      CALL SHOOTING_RK(A1,NSTEPS,NEQ,X,Y,H)
+      B1 = Y(2)-1
+      WRITE(10,100),A1,Y(2),B1
+C THE SECOND GUESS WITH DIFFERENT SYMBOL
+      A2 = 0.6
+      CALL SHOOTING_RK(A2,NSTEPS,NEQ,X,Y,H)
+      B2 = Y(2)-1
+      WRITE(10,100),A2,Y(2),B2
+      B3 = 1.
+      DO WHILE(ABS(B3) .GT. 1.D-6)
+          A3 = A1-B1*(A2-A1)/(B2-B1)
+          CALL SHOOTING_RK(A3,NSTEPS,NEQ,X,Y,H)
+          B3 = Y(2)-1
+          WRITE(10,100) A3,Y(2),B3
+          IF(B3 * B1 .GT. 0) THEN
+              A1 = A3
+          ELSE
+              A2 = A3
+          ENDIF
+      ENDDO
+C CALCULATE THE F'(ETA) WITH THE RIGHT INITIAL CONDITION
+      Y(1) = 0.
+      Y(2) = 0.
+      Y(3) = A3
+      X = 0.
+      OPEN(UNIT = 20, FILE = "PB2_OUT.TXT")
+      WRITE(20,200) "ETA","F'(ETA)"
+      DO I = 1, NSTEPS
+          WRITE(20,100) X,Y(2)
+          CALL RUNGE(NEQ,X,Y,H)
+C CALCULATE THE ETA_DELTA
+          IF(FLAG .AND. (Y(2) .GT. 0.99)) THEN
+C PRINT THE ETA_DELTA
+              WRITE(*,*) "When eta = ",X,"u/U_inf is nearly 0.99"
+              FLAG = .FALSE.
+          ENDIF
+      ENDDO
+      WRITE(20,100) X,Y(2)
+
+C THIS IS THE OUTPUT FORMAT
+100   FORMAT(3(F10.6))
+200   FORMAT(3(A15))
+      STOP
+      END
